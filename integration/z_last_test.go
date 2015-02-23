@@ -71,7 +71,7 @@ func afterTest(t *testing.T) {
 		// TODO: there might exist a bug in http package, which will leave
 		// readLoop without writeLoop after close all idle connections.
 		// comment this line until we have time to dig into it.
-		// ").readLoop(":                                  "a Transport",
+		").readLoop(":                                  "a Transport",
 		").writeLoop(":                                 "a Transport",
 		"created by net/http/httptest.(*Server).Start": "an httptest.Server",
 		"timeoutHandler":                               "a TimeoutHandler",
