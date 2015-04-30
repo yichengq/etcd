@@ -113,6 +113,7 @@ func (cw *streamWriter) run() {
 	var flusher http.Flusher
 	tickc := time.Tick(ConnReadTimeout / 3)
 
+	tc := time.Tick(10 * time.Millisecond)
 	for {
 		select {
 		case <-heartbeatc:
@@ -125,7 +126,6 @@ func (cw *streamWriter) run() {
 				heartbeatc, msgc = nil, nil
 				continue
 			}
-			flusher.Flush()
 			reportSentDuration(string(t), linkHeartbeatMessage, time.Since(start))
 		case m := <-msgc:
 			if t == streamTypeMsgApp && m.Term != msgAppTerm {
@@ -148,8 +148,14 @@ func (cw *streamWriter) run() {
 				cw.r.ReportUnreachable(m.To)
 				continue
 			}
-			flusher.Flush()
 			reportSentDuration(string(t), m, time.Since(start))
+		case <-tc:
+			cw.mu.Lock()
+			working := cw.working
+			cw.mu.Unlock()
+			if working {
+				flusher.Flush()
+			}
 		case conn := <-cw.connc:
 			cw.resetCloser()
 			t = conn.t
