@@ -134,6 +134,9 @@ func (p *peer) Send(m raftpb.Message) error {
 		p.propBatcher.Batch(m)
 	case canBatch(m) && p.stream.isOpen():
 		if !p.batcher.ShouldBatch(time.Now()) {
+			if m.Type == raftpb.MsgAppResp {
+				log.Printf("send out batched MsgAppResp with index %d and reject %v", m.Index, m.Reject)
+			}
 			err = p.send(m)
 		}
 	case canUseStream(m):
