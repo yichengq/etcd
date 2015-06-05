@@ -105,6 +105,7 @@ func (t *transport) Send(msgs []raftpb.Message) {
 }
 
 func (t *transport) Stop() {
+	log.Printf("transport: stopping...")
 	for _, p := range t.peers {
 		p.Stop()
 	}
@@ -114,6 +115,7 @@ func (t *transport) Stop() {
 }
 
 func (t *transport) AddPeer(id types.ID, urls []string) {
+	log.Printf("transport: add peer %s", id)
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if _, ok := t.peers[id]; ok {
@@ -146,6 +148,7 @@ func (t *transport) RemoveAllPeers() {
 
 // the caller of this function must have the peers mutex.
 func (t *transport) removePeer(id types.ID) {
+	log.Printf("transport: remove peer %s", id)
 	if peer, ok := t.peers[id]; ok {
 		peer.Stop()
 	} else {
