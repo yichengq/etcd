@@ -141,6 +141,9 @@ func (p *peer) Send(m raftpb.Message) error {
 			err = p.send(m)
 		}
 	default:
+		if m.Type == raftpb.MsgAppResp {
+			log.Printf("send out MsgAppResp with index %d and reject %v", m.Index, m.Reject)
+		}
 		err = p.send(m)
 	}
 	// send out batched MsgProp if needed

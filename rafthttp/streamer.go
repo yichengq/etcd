@@ -77,6 +77,9 @@ func (s *stream) attach(sw *streamWriter) error {
 		if sw.term < s.w.term {
 			return fmt.Errorf("cannot attach out of data stream server [%d / %d]", sw.term, s.w.term)
 		}
+		if sw.term == s.w.term {
+			log.Printf("attach stream with the same term %d", s.w.term)
+		}
 		s.w.stop()
 	}
 	s.w = sw
@@ -116,12 +119,14 @@ func (s *stream) invalidate(term uint64) {
 	defer s.Unlock()
 	if s.w != nil {
 		if s.w.term < term {
+			log.Printf("stream: close lower-term-%d write stream for term %d", s.w.term, term)
 			s.w.stop()
 			s.w = nil
 		}
 	}
 	if s.r != nil {
 		if s.r.term < term {
+			log.Printf("stream: close lower-term-%d read stream for term %d", s.r.term, term)
 			s.r.stop()
 			s.r = nil
 		}
