@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"os"
 	"path"
 	"regexp"
 	"sync/atomic"
@@ -43,6 +44,7 @@ import (
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/coreos/etcd/rafthttp"
 	"github.com/coreos/etcd/snap"
+	v3storage "github.com/coreos/etcd/storage"
 	"github.com/coreos/etcd/store"
 	"github.com/coreos/etcd/version"
 	"github.com/coreos/etcd/wal"
@@ -155,7 +157,8 @@ type EtcdServer struct {
 
 	cluster *cluster
 
-	store store.Store
+	store   store.Store
+	v3store v3storage.KV
 
 	stats  *stats.ServerStats
 	lstats *stats.LeaderStats
@@ -173,6 +176,21 @@ type EtcdServer struct {
 // configuration is considered static for the lifetime of the EtcdServer.
 func NewServer(cfg *ServerConfig) (*EtcdServer, error) {
 	st := store.New(StoreClusterPrefix, StoreKeysPrefix)
+	os.MkdirAll(cfg.DataDir, 0777)
+	v3storepath := path.Join(cfg.DataDir, "v3store")
+	if f, err := os.Open(v3storepath); err != nil {
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+		f, err = os.Create(v3storepath)
+		if err != nil {
+			return nil, err
+		}
+		f.Close()
+	} else {
+		f.Close()
+	}
+	v3store := v3storage.New(v3storepath)
 	var w *wal.WAL
 	var n raft.Node
 	var s *raft.MemoryStorage
@@ -268,6 +286,9 @@ func NewServer(cfg *ServerConfig) (*EtcdServer, error) {
 			if err := st.Recovery(snapshot.Data); err != nil {
 				plog.Panicf("recovered store from snapshot error: %v", err)
 			}
+			if err := v3store.Restore(); err != nil {
+				plog.Panicf("restored v3 store error: %v", err)
+			}
 			plog.Infof("recovered store from snapshot at index %d", snapshot.Metadata.Index)
 		}
 		cfg.Print()
@@ -297,6 +318,7 @@ func NewServer(cfg *ServerConfig) (*EtcdServer, error) {
 		snapCount: cfg.SnapCount,
 		errorc:    make(chan error, 1),
 		store:     st,
+		v3store:   v3store,
 		r: raftNode{
 			Node:        n,
 			ticker:      time.Tick(time.Duration(cfg.TickMs) * time.Millisecond),
