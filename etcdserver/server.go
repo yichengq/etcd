@@ -440,6 +440,7 @@ func (s *EtcdServer) run() {
 	s.r.applyc = make(chan apply)
 	go s.r.run()
 	defer func() {
+		s.v3store.Close()
 		s.r.stopped <- struct{}{}
 		<-s.r.done
 		close(s.done)
@@ -919,6 +920,7 @@ func (s *EtcdServer) snapshot(snapi uint64, confState raftpb.ConfState) {
 		if err := s.r.storage.SaveSnap(snap); err != nil {
 			plog.Fatalf("save snapshot error: %v", err)
 		}
+		s.v3store.SaveV2Snapshot(snapi, pbutil.MustMarshal(&snap))
 		plog.Infof("saved snapshot at index %d", snap.Metadata.Index)
 
 		// keep some in memory log entries for slow followers.

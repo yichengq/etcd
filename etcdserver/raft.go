@@ -150,6 +150,7 @@ func (r *raftNode) run() {
 				if err := r.storage.SaveSnap(rd.Snapshot); err != nil {
 					plog.Fatalf("raft save snapshot error: %v", err)
 				}
+				r.s.v3store.SaveV2Snapshot(rd.Snapshot.Metadata.Index, pbutil.MustMarshal(&rd.Snapshot))
 				r.raftStorage.ApplySnapshot(rd.Snapshot)
 				plog.Infof("raft applied incoming snapshot at index %d", rd.Snapshot.Metadata.Index)
 			}

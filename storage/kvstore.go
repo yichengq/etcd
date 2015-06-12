@@ -2,6 +2,7 @@ package storage
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"math"
@@ -21,6 +22,7 @@ var (
 
 	scheduledCompactKeyName = []byte("scheduledCompactRev")
 	finishedCompactKeyName  = []byte("finishedCompactRev")
+	v2snapshotKeyNamePrefix = []byte("v2_snapshot")
 
 	ErrTnxIDMismatch = errors.New("storage: tnx id mismatch")
 	ErrCompacted     = errors.New("storage: required reversion has been compacted")
@@ -148,6 +150,30 @@ func (s *store) TnxDeleteRange(tnxID int64, key, end []byte) (n, rev int64, err 
 		rev = int64(s.currentRev.main + 1)
 	}
 	return n, rev, nil
+}
+
+func (s *store) SaveV2Snapshot(index uint64, data []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := fmt.Sprintf("%s_%d", v2snapshotKeyNamePrefix, index)
+	tx := s.b.BatchTx()
+	tx.Lock()
+	tx.UnsafePut(metaBucketName, []byte(key), data)
+	tx.Unlock()
+}
+
+func (s *store) LoadV2Snapshot(index uint64) []byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := fmt.Sprintf("%s_%d", v2snapshotKeyNamePrefix, index)
+	tx := s.b.BatchTx()
+	tx.Lock()
+	_, vals := tx.UnsafeRange(metaBucketName, []byte(key), nil, 0)
+	if len(vals) != 1 {
+		log.Fatal("len(vals) got %d, want 1", len(vals))
+	}
+	tx.Unlock()
+	return vals[0]
 }
 
 func (s *store) Compact(rev int64) error {

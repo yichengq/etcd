@@ -38,6 +38,9 @@ type KV interface {
 	TnxPut(tnxID int64, key, value []byte) (rev int64, err error)
 	TnxDeleteRange(tnxID int64, key, end []byte) (n, rev int64, err error)
 
+	SaveV2Snapshot(index uint64, data []byte)
+	LoadV2Snapshot(index uint64) []byte
+
 	Compact(rev int64) error
 
 	// Write a snapshot to the given io writer
