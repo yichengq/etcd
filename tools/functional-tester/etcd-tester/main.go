@@ -16,42 +16,25 @@ package main
 
 import (
 	"flag"
-	"log"
-	"net/http"
 	"strings"
+	"time"
 )
 
 func main() {
-	endpointStr := flag.String("agent-endpoints", ":9027", "HTTP RPC endpoints of agents")
-	datadir := flag.String("data-dir", "agent.etcd", "etcd data directory location on agent machine")
+	endpointStr := flag.String("endpoints", "", "HTTP endpoints of members")
 	stressKeySize := flag.Int("stress-key-size", 100, "the size of each key written into etcd")
-	stressKeySuffixRange := flag.Int("stress-key-count", 250000, "the count of key range written into etcd")
-	limit := flag.Int("limit", 3, "the limit of rounds to run failure set")
+	stressKeySuffixRange := flag.Int("stress-key-count", 100000, "the count of key range written into etcd")
 	flag.Parse()
 
 	endpoints := strings.Split(*endpointStr, ",")
-	c, err := newCluster(endpoints, *datadir, *stressKeySize, *stressKeySuffixRange)
-	if err != nil {
-		log.Fatal(err)
+	for _, e := range endpoints {
+		stress := &stresser{
+			Endpoint:       e,
+			KeySize:        *stressKeySize,
+			KeySuffixRange: *stressKeySuffixRange,
+			N:              100,
+		}
+		stress.Stress()
 	}
-	defer c.Terminate()
-
-	t := &tester{
-		failures: []failure{
-			newFailureKillAll(),
-			newFailureKillMajority(),
-			newFailureKillOne(),
-			newFailureKillOneForLongTime(),
-			newFailureIsolate(),
-			newFailureIsolateAll(),
-		},
-		cluster: c,
-		limit:   *limit,
-	}
-
-	sh := statusHandler{status: &t.status}
-	http.Handle("/status", sh)
-	go func() { log.Fatal(http.ListenAndServe(":9028", nil)) }()
-
-	t.runLoop()
+	time.Sleep(time.Hour)
 }

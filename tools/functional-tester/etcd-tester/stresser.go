@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"net"
 	"net/http"
@@ -70,6 +71,7 @@ func (s *stresser) Stress() error {
 				}
 				s.mu.Lock()
 				if err != nil {
+					log.Print(err)
 					s.failure++
 				} else {
 					s.success++
