@@ -46,7 +46,12 @@ func (tl *timeList) Wait(deadline time.Time) <-chan struct{} {
 	defer tl.l.Unlock()
 	ch := make(chan struct{}, 1)
 	// The given deadline SHOULD be unique.
-	tl.m[deadline.UnixNano()] = ch
+	t := deadline.UnixNano()
+	if _, ok := tl.m[t]; ok {
+		panic("existing deadline")
+	} else {
+		tl.m[t] = ch
+	}
 	return ch
 }
 

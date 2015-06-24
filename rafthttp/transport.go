@@ -16,6 +16,7 @@ package rafthttp
 
 import (
 	"net/http"
+	"os"
 	"sync"
 
 	"github.com/coreos/etcd/Godeps/_workspace/src/github.com/coreos/pkg/capnslog"
@@ -27,6 +28,10 @@ import (
 )
 
 var plog = capnslog.NewPackageLogger("github.com/coreos/etcd", "rafthttp")
+
+func init() {
+	capnslog.SetFormatter(capnslog.NewStringFormatter(os.Stderr))
+}
 
 type Raft interface {
 	Process(ctx context.Context, m raftpb.Message) error
