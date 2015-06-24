@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"sort"
@@ -26,7 +25,7 @@ func NewClusterHealthCommand() cli.Command {
 }
 
 func handleClusterHealth(c *cli.Context) {
-	log.Printf("start")
+	fmt.Printf("start\n")
 	endpoints, err := getEndpoints(c)
 	if err != nil {
 		handleError(ExitServerError, err)
@@ -54,7 +53,7 @@ func handleClusterHealth(c *cli.Context) {
 		fmt.Println("cluster may be unhealthy: failed to connect", cl)
 		os.Exit(1)
 	}
-	log.Printf("leader stats: %+v", ls0)
+	fmt.Printf("leader stats: %+v\n", ls0)
 
 	// is raft stable and making progress?
 	client = etcd.NewClient([]string{ep})
@@ -90,7 +89,7 @@ func handleClusterHealth(c *cli.Context) {
 		fmt.Println("cluster is unhealthy")
 		os.Exit(1)
 	}
-	log.Printf("leader stats: %+v", ls1)
+	fmt.Printf("leader stats: %+v\n", ls1)
 
 	fmt.Println("cluster is healthy")
 	// self is healthy
@@ -127,7 +126,7 @@ func getLeaderStats(tr *http.Transport, endpoints []string) (string, *stats.Lead
 	for _, ep := range endpoints {
 		resp, err := httpclient.Get(ep + "/v2/stats/leader")
 		if err != nil {
-			log.Printf("get %s error: %v", ep, err)
+			fmt.Printf("get %s error: %v\n", ep, err)
 			continue
 		}
 		defer resp.Body.Close()
