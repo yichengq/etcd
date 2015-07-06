@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"encoding/binary"
 	"io"
 	"log"
 	"time"
@@ -64,6 +65,9 @@ func (b *backend) ForceCommit() {
 
 func (b *backend) Snapshot(w io.Writer) (n int64, err error) {
 	b.db.View(func(tx *bolt.Tx) error {
+		if err = binary.Write(w, binary.BigEndian, uint64(tx.Size())); err != nil {
+			return nil
+		}
 		n, err = tx.WriteTo(w)
 		return nil
 	})

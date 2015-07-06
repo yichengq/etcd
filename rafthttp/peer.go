@@ -23,6 +23,7 @@ import (
 	"github.com/coreos/etcd/pkg/types"
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
+	"github.com/coreos/etcd/storage"
 )
 
 const (
@@ -88,10 +89,11 @@ type peer struct {
 	id types.ID
 	r  Raft
 
-	msgAppWriter *streamWriter
-	writer       *streamWriter
-	pipeline     *pipeline
-	msgAppReader *streamReader
+	msgAppWriter  *streamWriter
+	writer        *streamWriter
+	msgSnapWriter *streamWriter
+	pipeline      *pipeline
+	msgAppReader  *streamReader
 
 	sendc    chan raftpb.Message
 	recvc    chan raftpb.Message
@@ -107,24 +109,25 @@ type peer struct {
 	done  chan struct{}
 }
 
-func startPeer(tr http.RoundTripper, urls types.URLs, local, to, cid types.ID, r Raft, fs *stats.FollowerStats, errorc chan error, term uint64) *peer {
+func startPeer(tr http.RoundTripper, urls types.URLs, local, to, cid types.ID, r Raft, fs *stats.FollowerStats, errorc chan error, v3store storage.KV, term uint64) *peer {
 	picker := newURLPicker(urls)
 	status := newPeerStatus(to)
 	p := &peer{
-		id:           to,
-		r:            r,
-		msgAppWriter: startStreamWriter(to, status, fs, r),
-		writer:       startStreamWriter(to, status, fs, r),
-		pipeline:     newPipeline(tr, picker, local, to, cid, status, fs, r, errorc),
-		sendc:        make(chan raftpb.Message),
-		recvc:        make(chan raftpb.Message, recvBufSize),
-		propc:        make(chan raftpb.Message, maxPendingProposals),
-		newURLsC:     make(chan types.URLs),
-		termc:        make(chan uint64),
-		pausec:       make(chan struct{}),
-		resumec:      make(chan struct{}),
-		stopc:        make(chan struct{}),
-		done:         make(chan struct{}),
+		id:            to,
+		r:             r,
+		msgAppWriter:  startStreamWriter(to, status, fs, r, v3store),
+		writer:        startStreamWriter(to, status, fs, r, v3store),
+		msgSnapWriter: startStreamWriter(to, status, fs, r, v3store),
+		pipeline:      newPipeline(tr, picker, local, to, cid, status, fs, r, errorc),
+		sendc:         make(chan raftpb.Message),
+		recvc:         make(chan raftpb.Message, recvBufSize),
+		propc:         make(chan raftpb.Message, maxPendingProposals),
+		newURLsC:      make(chan types.URLs),
+		termc:         make(chan uint64),
+		pausec:        make(chan struct{}),
+		resumec:       make(chan struct{}),
+		stopc:         make(chan struct{}),
+		done:          make(chan struct{}),
 	}
 
 	// Use go-routine for process of MsgProp because it is
@@ -145,6 +148,7 @@ func startPeer(tr http.RoundTripper, urls types.URLs, local, to, cid types.ID, r
 
 	p.msgAppReader = startStreamReader(tr, picker, streamTypeMsgAppV2, local, to, cid, status, p.recvc, p.propc, errorc, term)
 	reader := startStreamReader(tr, picker, streamTypeMessage, local, to, cid, status, p.recvc, p.propc, errorc, term)
+	msgSnapReader := startStreamReader(tr, picker, streamTypeMsgSnap, local, to, cid, status, p.recvc, p.propc, errorc, term)
 	go func() {
 		var paused bool
 		for {
@@ -153,14 +157,24 @@ func startPeer(tr http.RoundTripper, urls types.URLs, local, to, cid types.ID, r
 				if paused {
 					continue
 				}
+				if isMsgSnap(m) {
+					writec, ok := p.msgSnapWriter.writec()
+					if !ok {
+						p.r.ReportSnapshot(m.To, raft.SnapshotFailure)
+					} else {
+						select {
+						case writec <- m:
+						default:
+							p.r.ReportSnapshot(m.To, raft.SnapshotFailure)
+						}
+					}
+					continue
+				}
 				writec, name := p.pick(m)
 				select {
 				case writec <- m:
 				default:
 					p.r.ReportUnreachable(m.To)
-					if isMsgSnap(m) {
-						p.r.ReportSnapshot(m.To, raft.SnapshotFailure)
-					}
 					if status.isActive() {
 						plog.Warningf("dropped %s to %s since %s's sending buffer is full", m.Type, p.id, name)
 					} else {
@@ -181,9 +195,11 @@ func startPeer(tr http.RoundTripper, urls types.URLs, local, to, cid types.ID, r
 				cancel()
 				p.msgAppWriter.stop()
 				p.writer.stop()
+				p.msgSnapWriter.stop()
 				p.pipeline.stop()
 				p.msgAppReader.stop()
 				reader.stop()
+				msgSnapReader.stop()
 				close(p.done)
 				return
 			}
@@ -216,6 +232,8 @@ func (p *peer) attachOutgoingConn(conn *outgoingConn) {
 		ok = p.msgAppWriter.attach(conn)
 	case streamTypeMessage:
 		ok = p.writer.attach(conn)
+	case streamTypeMsgSnap:
+		ok = p.msgSnapWriter.attach(conn)
 	default:
 		plog.Panicf("unhandled stream type %s", conn.t)
 	}
@@ -253,6 +271,7 @@ func (p *peer) pick(m raftpb.Message) (writec chan<- raftpb.Message, picked stri
 	// Considering MsgSnap may have a big size, e.g., 1G, and will block
 	// stream for a long time, only use one of the N pipelines to send MsgSnap.
 	if isMsgSnap(m) {
+		panic("wut")
 		return p.pipeline.msgc, pipelineMsg
 	} else if writec, ok = p.msgAppWriter.writec(); ok && canUseMsgAppStream(m) {
 		return writec, streamApp

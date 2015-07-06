@@ -161,6 +161,8 @@ func (h *streamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		t = streamTypeMsgAppV2
 	case path.Join(RaftStreamPrefix, string(streamTypeMessage)):
 		t = streamTypeMessage
+	case path.Join(RaftStreamPrefix, string(streamTypeMsgSnap)):
+		t = streamTypeMsgSnap
 	default:
 		plog.Debugf("ignored unexpected streaming request path %s", r.URL.Path)
 		http.Error(w, "invalid path", http.StatusNotFound)

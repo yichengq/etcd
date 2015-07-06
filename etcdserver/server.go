@@ -283,10 +283,11 @@ func NewServer(cfg *ServerConfig) (*EtcdServer, error) {
 			return nil, err
 		}
 		if snapshot != nil {
-			if err := st.Recovery(snapshot.Data); err != nil {
+			_, d := v3store.LoadV2Snapshot(snapshot.Metadata.Index)
+			if err := st.Recovery(d); err != nil {
 				plog.Panicf("recovered store from snapshot error: %v", err)
 			}
-			if err := v3store.Restore(); err != nil {
+			if err := v3store.Restore("v3store"); err != nil {
 				plog.Panicf("restored v3 store error: %v", err)
 			}
 			plog.Infof("recovered store from snapshot at index %d", snapshot.Metadata.Index)
@@ -336,7 +337,7 @@ func NewServer(cfg *ServerConfig) (*EtcdServer, error) {
 	}
 
 	// TODO: move transport initialization near the definition of remote
-	tr := rafthttp.NewTransporter(cfg.Transport, id, cl.ID(), srv, srv.errorc, sstats, lstats)
+	tr := rafthttp.NewTransporter(cfg.Transport, id, cl.ID(), srv, srv.errorc, sstats, lstats, srv.v3store)
 	// add all remotes into transport
 	for _, m := range remotes {
 		if m.ID != id {
@@ -452,12 +453,19 @@ func (s *EtcdServer) run() {
 		case apply := <-s.r.apply():
 			// apply snapshot
 			if !raft.IsEmptySnap(apply.snapshot) {
+				if err := os.Rename(fmt.Sprintf("v3store_%016x", apply.snapshot.Metadata.Index), "v3store"); err != nil {
+					plog.Panicf("rename error (%v)", err)
+				}
+				if err := s.v3store.Restore("v3store"); err != nil {
+					plog.Panicf("v3store restore error (%v)", err)
+				}
 				if apply.snapshot.Metadata.Index <= appliedi {
 					plog.Panicf("snapshot index [%d] should > appliedi[%d] + 1",
 						apply.snapshot.Metadata.Index, appliedi)
 				}
 
-				if err := s.store.Recovery(apply.snapshot.Data); err != nil {
+				_, d := s.v3store.LoadV2Snapshot(apply.snapshot.Metadata.Index)
+				if err := s.store.Recovery(d); err != nil {
 					plog.Panicf("recovery store error: %v", err)
 				}
 				s.cluster.Recover()
@@ -908,7 +916,7 @@ func (s *EtcdServer) snapshot(snapi uint64, confState raftpb.ConfState) {
 		if err != nil {
 			plog.Panicf("store save should never fail: %v", err)
 		}
-		snap, err := s.r.raftStorage.CreateSnapshot(snapi, &confState, d)
+		snap, err := s.r.raftStorage.CreateSnapshot(snapi, &confState)
 		if err != nil {
 			// the snapshot was done asynchronously with the progress of raft.
 			// raft might have already got a newer snapshot.
@@ -917,10 +925,11 @@ func (s *EtcdServer) snapshot(snapi uint64, confState raftpb.ConfState) {
 			}
 			plog.Panicf("unexpected create snapshot error %v", err)
 		}
+		// TODO: get rid of SaveSnap
 		if err := s.r.storage.SaveSnap(snap); err != nil {
 			plog.Fatalf("save snapshot error: %v", err)
 		}
-		s.v3store.SaveV2Snapshot(snapi, pbutil.MustMarshal(&snap))
+		s.v3store.SaveV2Snapshot(snapi, snap, d)
 		plog.Infof("saved snapshot at index %d", snap.Metadata.Index)
 
 		// keep some in memory log entries for slow followers.

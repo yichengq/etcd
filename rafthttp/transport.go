@@ -24,6 +24,7 @@ import (
 	"github.com/coreos/etcd/pkg/types"
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
+	"github.com/coreos/etcd/storage"
 )
 
 var plog = capnslog.NewPackageLogger("github.com/coreos/etcd", "rafthttp")
@@ -78,6 +79,7 @@ type transport struct {
 	raft         Raft
 	serverStats  *stats.ServerStats
 	leaderStats  *stats.LeaderStats
+	v3store      storage.KV
 
 	mu      sync.RWMutex         // protect the term, remote and peer map
 	term    uint64               // the latest term that has been observed
@@ -86,7 +88,7 @@ type transport struct {
 	errorc  chan error
 }
 
-func NewTransporter(rt http.RoundTripper, id, cid types.ID, r Raft, errorc chan error, ss *stats.ServerStats, ls *stats.LeaderStats) Transporter {
+func NewTransporter(rt http.RoundTripper, id, cid types.ID, r Raft, errorc chan error, ss *stats.ServerStats, ls *stats.LeaderStats, v3store storage.KV) Transporter {
 	return &transport{
 		roundTripper: rt,
 		id:           id,
@@ -97,6 +99,7 @@ func NewTransporter(rt http.RoundTripper, id, cid types.ID, r Raft, errorc chan 
 		remotes:      make(map[types.ID]*remote),
 		peers:        make(map[types.ID]Peer),
 		errorc:       errorc,
+		v3store:      v3store,
 	}
 }
 
@@ -194,7 +197,7 @@ func (t *transport) AddPeer(id types.ID, us []string) {
 		plog.Panicf("newURLs %+v should never fail: %+v", us, err)
 	}
 	fs := t.leaderStats.Follower(id.String())
-	t.peers[id] = startPeer(t.roundTripper, urls, t.id, id, t.clusterID, t.raft, fs, t.errorc, t.term)
+	t.peers[id] = startPeer(t.roundTripper, urls, t.id, id, t.clusterID, t.raft, fs, t.errorc, t.v3store, t.term)
 }
 
 func (t *transport) RemovePeer(id types.ID) {

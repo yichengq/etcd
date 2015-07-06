@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/coreos/etcd/pkg/pbutil"
+	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/coreos/etcd/storage/backend"
 	"github.com/coreos/etcd/storage/storagepb"
 )
@@ -20,9 +22,10 @@ var (
 	keyBucketName  = []byte("key")
 	metaBucketName = []byte("meta")
 
-	scheduledCompactKeyName = []byte("scheduledCompactRev")
-	finishedCompactKeyName  = []byte("finishedCompactRev")
-	v2snapshotKeyNamePrefix = []byte("v2_snapshot")
+	scheduledCompactKeyName     = []byte("scheduledCompactRev")
+	finishedCompactKeyName      = []byte("finishedCompactRev")
+	v2snapshotKeyNamePrefix     = []byte("v2_snapshot")
+	v2snapshotDataKeyNamePrefix = []byte("v2_snapshot_data")
 
 	ErrTnxIDMismatch = errors.New("storage: tnx id mismatch")
 	ErrCompacted     = errors.New("storage: required reversion has been compacted")
@@ -152,28 +155,37 @@ func (s *store) TnxDeleteRange(tnxID int64, key, end []byte) (n, rev int64, err 
 	return n, rev, nil
 }
 
-func (s *store) SaveV2Snapshot(index uint64, data []byte) {
+func (s *store) SaveV2Snapshot(index uint64, snap raftpb.Snapshot, data []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	key := fmt.Sprintf("%s_%d", v2snapshotKeyNamePrefix, index)
 	tx := s.b.BatchTx()
 	tx.Lock()
+	key := fmt.Sprintf("%s_%d", v2snapshotKeyNamePrefix, index)
+	tx.UnsafePut(metaBucketName, []byte(key), pbutil.MustMarshal(&snap))
+	key = fmt.Sprintf("%s_%d", v2snapshotDataKeyNamePrefix, index)
 	tx.UnsafePut(metaBucketName, []byte(key), data)
 	tx.Unlock()
 }
 
-func (s *store) LoadV2Snapshot(index uint64) []byte {
+func (s *store) LoadV2Snapshot(index uint64) (snap raftpb.Snapshot, data []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	key := fmt.Sprintf("%s_%d", v2snapshotKeyNamePrefix, index)
 	tx := s.b.BatchTx()
 	tx.Lock()
+	key := fmt.Sprintf("%s_%d", v2snapshotKeyNamePrefix, index)
 	_, vals := tx.UnsafeRange(metaBucketName, []byte(key), nil, 0)
 	if len(vals) != 1 {
-		log.Fatal("len(vals) got %d, want 1", len(vals))
+		log.Fatalf("len(vals) got %d, want 1", len(vals))
 	}
+	pbutil.MustUnmarshal(&snap, vals[0])
+	key = fmt.Sprintf("%s_%d", v2snapshotDataKeyNamePrefix, index)
+	_, vals = tx.UnsafeRange(metaBucketName, []byte(key), nil, 0)
+	if len(vals) != 1 {
+		log.Fatalf("len(vals) got %d, want 1", len(vals))
+	}
+	data = vals[0]
 	tx.Unlock()
-	return vals[0]
+	return snap, data
 }
 
 func (s *store) Compact(rev int64) error {
@@ -205,9 +217,15 @@ func (s *store) Snapshot(w io.Writer) (int64, error) {
 	return s.b.Snapshot(w)
 }
 
-func (s *store) Restore() error {
+func (s *store) Restore(path string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	close(s.stopc)
+	s.wg.Wait()
+	s.b.Close()
+	s.b = backend.New(path, batchInterval, batchLimit)
+	s.stopc = make(chan struct{})
 
 	min, max := newRevBytes(), newRevBytes()
 	revToBytes(reversion{}, min)
@@ -227,7 +245,7 @@ func (s *store) Restore() error {
 	for i, key := range keys {
 		e := &storagepb.Event{}
 		if err := e.Unmarshal(vals[i]); err != nil {
-			log.Fatalf("storage: cannot unmarshal event: %v", err)
+			log.Fatalf("storage: cannot unmarshal event %s: %v", key, err)
 		}
 
 		rev := bytesToRev(key)
@@ -261,6 +279,9 @@ func (s *store) Restore() error {
 }
 
 func (s *store) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	close(s.stopc)
 	s.wg.Wait()
 	return s.b.Close()

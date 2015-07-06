@@ -167,7 +167,6 @@ func TestStorageCompact(t *testing.T) {
 func TestStorageCreateSnapshot(t *testing.T) {
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	cs := &pb.ConfState{Nodes: []uint64{1, 2, 3}}
-	data := []byte("data")
 
 	tests := []struct {
 		i uint64
@@ -175,13 +174,13 @@ func TestStorageCreateSnapshot(t *testing.T) {
 		werr  error
 		wsnap pb.Snapshot
 	}{
-		{4, nil, pb.Snapshot{Data: data, Metadata: pb.SnapshotMetadata{Index: 4, Term: 4, ConfState: *cs}}},
-		{5, nil, pb.Snapshot{Data: data, Metadata: pb.SnapshotMetadata{Index: 5, Term: 5, ConfState: *cs}}},
+		{4, nil, pb.Snapshot{Metadata: pb.SnapshotMetadata{Index: 4, Term: 4, ConfState: *cs}}},
+		{5, nil, pb.Snapshot{Metadata: pb.SnapshotMetadata{Index: 5, Term: 5, ConfState: *cs}}},
 	}
 
 	for i, tt := range tests {
 		s := &MemoryStorage{ents: ents}
-		snap, err := s.CreateSnapshot(tt.i, cs, data)
+		snap, err := s.CreateSnapshot(tt.i, cs)
 		if err != tt.werr {
 			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
 		}
