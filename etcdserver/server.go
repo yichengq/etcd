@@ -52,17 +52,13 @@ const (
 	// owner can make/remove files inside the directory
 	privateDirMode = 0700
 
-	defaultSyncTimeout = time.Second
-	DefaultSnapCount   = 10000
-	// TODO: calculate based on heartbeat interval
-	defaultPublishTimeout = 5 * time.Second
+	DefaultSnapCount = 10000
 
 	StoreClusterPrefix = "/0"
 	StoreKeysPrefix    = "/1"
 
 	purgeFileInterval      = 30 * time.Second
 	monitorVersionInterval = 5 * time.Second
-	versionUpdateTimeout   = 1 * time.Second
 )
 
 var (
@@ -335,7 +331,7 @@ func NewServer(cfg *ServerConfig) (*EtcdServer, error) {
 // It also starts a goroutine to publish its server information.
 func (s *EtcdServer) Start() {
 	s.start()
-	go s.publish(defaultPublishTimeout)
+	go s.publish(s.expectedCommitDelay())
 	go s.purgeFile()
 	go monitorFileDescriptor(s.done)
 	go s.monitorVersions()
@@ -631,6 +627,21 @@ func (s *EtcdServer) Term() uint64 { return atomic.LoadUint64(&s.r.term) }
 func (s *EtcdServer) Lead() uint64 { return atomic.LoadUint64(&s.r.lead) }
 
 func (s *EtcdServer) Leader() types.ID { return types.ID(s.Lead()) }
+
+// RequestTimeout returns an appropriate timeout to wait for request to be committed.
+func (s *EtcdServer) RequestTimeout() time.Duration {
+	// expectedCommitDelay
+	// + 2 * heartbeat for possible message lost
+	// + 2 * election timeout for possible leader election
+	return s.expectedCommitDelay() + 2*time.Duration(s.cfg.TickMs)*time.Millisecond + 2*time.Duration(s.cfg.ElectionTicks)*time.Duration(s.cfg.TickMs)*time.Millisecond
+}
+
+func (s *EtcdServer) expectedCommitDelay() time.Duration {
+	// We assume that heartbeat >= TTL.
+	// 5s for computation and IO delay
+	// + 4 * heartbeat(TTL) for expected time between proposal by follower and commit at the follower
+	return 5*time.Second + 4*time.Duration(s.cfg.TickMs)*time.Millisecond
+}
 
 // configure sends a configuration change through consensus and
 // then waits for it to be applied to the server. It
@@ -981,7 +992,7 @@ func (s *EtcdServer) updateClusterVersion(ver string) {
 		Path:   path.Join(StoreClusterPrefix, "version"),
 		Val:    ver,
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), versionUpdateTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), s.expectedCommitDelay())
 	_, err := s.Do(ctx, req)
 	cancel()
 	switch err {

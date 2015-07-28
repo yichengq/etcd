@@ -653,6 +653,7 @@ func TestSyncTrigger(t *testing.T) {
 	n := newReadyNode()
 	st := make(chan time.Time, 1)
 	srv := &EtcdServer{
+		cfg: &ServerConfig{TickMs: 1},
 		r: raftNode{
 			Node:        n,
 			raftStorage: raft.NewMemoryStorage(),
@@ -1046,6 +1047,7 @@ func TestUpdateVersion(t *testing.T) {
 	w := &waitWithResponse{ch: ch}
 	srv := &EtcdServer{
 		id:         1,
+		cfg:        &ServerConfig{TickMs: 1},
 		r:          raftNode{Node: n},
 		attributes: Attributes{Name: "node1", ClientURLs: []string{"http://node1.com"}},
 		cluster:    &cluster{},
