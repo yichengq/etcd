@@ -429,6 +429,7 @@ func (cr *streamReader) dial(t streamType) (io.ReadCloser, error) {
 
 	resp, err := cr.tr.RoundTrip(req)
 	if err != nil {
+		plog.Printf("failed at roundtrip")
 		cr.picker.unreachable(u)
 		return nil, err
 	}
