@@ -161,13 +161,17 @@ func (p *pipeline) post(data []byte) (err error) {
 		}
 	}()
 
+	plog.Printf("start to roundtrip for %p", req)
 	resp, err := p.tr.RoundTrip(req)
+	plog.Printf("dial finish for %p", req)
 	done <- struct{}{}
 	if err != nil {
 		p.picker.unreachable(u)
 		return err
 	}
+	plog.Printf("start to read for %p", req)
 	b, err := ioutil.ReadAll(resp.Body)
+	plog.Printf("read finish for %p", req)
 	if err != nil {
 		p.picker.unreachable(u)
 		return err
