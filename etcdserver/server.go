@@ -743,7 +743,7 @@ func (s *EtcdServer) publish(timeout time.Duration) {
 		cancel()
 		switch err {
 		case nil:
-			plog.Infof("published %+v to cluster %s", s.attributes, s.cluster.ID())
+			plog.Errorf("published %+v to cluster %s", s.attributes, s.cluster.ID())
 			return
 		case ErrStopped:
 			plog.Infof("aborting publish because server is stopped")
@@ -820,6 +820,9 @@ func (s *EtcdServer) applyRequest(r pb.Request) Response {
 		return Response{Event: ev, err: err}
 	}
 	expr := timeutil.UnixNanoToTime(r.Expiration)
+	if r.Path == "/0/version" {
+		plog.Errorf("apply cluster version request")
+	}
 	switch r.Method {
 	case "POST":
 		return f(s.store.Create(r.Path, r.Dir, r.Val, true, expr))
@@ -1040,6 +1043,7 @@ func (s *EtcdServer) updateClusterVersion(ver string) {
 	cancel()
 	switch err {
 	case nil:
+		plog.Errorf("updated the cluster version to %s", version.Cluster(ver))
 		return
 	case ErrStopped:
 		plog.Infof("aborting update cluster version because server is stopped")

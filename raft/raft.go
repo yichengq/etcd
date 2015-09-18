@@ -526,6 +526,7 @@ func stepLeader(r *raft, m pb.Message) {
 			// If we are not currently a member of the range (i.e. this node
 			// was removed from the configuration while serving as leader),
 			// drop any new proposals.
+			fmt.Printf("drop MsgProp\n")
 			return
 		}
 		for i, e := range m.Entries {

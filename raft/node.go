@@ -16,6 +16,8 @@ package raft
 
 import (
 	"errors"
+	"fmt"
+	"time"
 
 	"github.com/coreos/etcd/Godeps/_workspace/src/golang.org/x/net/context"
 	pb "github.com/coreos/etcd/raft/raftpb"
@@ -203,6 +205,8 @@ type node struct {
 	done       chan struct{}
 	stop       chan struct{}
 	status     chan chan Status
+
+	firstProp bool
 }
 
 func newNode() node {
@@ -260,13 +264,13 @@ func (n *node) run(r *raft) {
 		if lead != r.lead {
 			if r.hasLeader() {
 				if lead == None {
-					raftLogger.Infof("raft.node: %x elected leader %x at term %d", r.id, r.lead, r.Term)
+					fmt.Printf("%+v: raft.node: %x elected leader %x at term %d\n", time.Now(), r.id, r.lead, r.Term)
 				} else {
-					raftLogger.Infof("raft.node: %x changed leader from %x to %x at term %d", r.id, lead, r.lead, r.Term)
+					fmt.Printf("%+v: raft.node: %x changed leader from %x to %x at term %d\n", time.Now(), r.id, lead, r.lead, r.Term)
 				}
 				propc = n.propc
 			} else {
-				raftLogger.Infof("raft.node: %x lost leader %x at term %d", r.id, lead, r.Term)
+				fmt.Printf("%+v: raft.node: %x lost leader %x at term %d\n", time.Now(), r.id, lead, r.Term)
 				propc = nil
 			}
 			lead = r.lead
@@ -362,6 +366,10 @@ func (n *node) Tick() {
 func (n *node) Campaign(ctx context.Context) error { return n.step(ctx, pb.Message{Type: pb.MsgHup}) }
 
 func (n *node) Propose(ctx context.Context, data []byte) error {
+	if !n.firstProp {
+		fmt.Printf("%+v: receive first proposal\n", time.Now())
+	}
+	n.firstProp = true
 	return n.step(ctx, pb.Message{Type: pb.MsgProp, Entries: []pb.Entry{{Data: data}}})
 }
 

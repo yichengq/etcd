@@ -626,15 +626,37 @@ func TestKVHash(t *testing.T) {
 	hashes := make([]uint32, 3)
 
 	for i := 0; i < len(hashes); i++ {
+		var b []byte
 		var err error
 		kv := New(tmpPath)
 		kv.Put([]byte("foo0"), []byte("bar0"))
 		kv.Put([]byte("foo1"), []byte("bar0"))
-		hashes[i], err = kv.Hash()
+		b, hashes[i], err = kv.Hash()
 		if err != nil {
 			t.Fatalf("failed to get hash: %v", err)
 		}
-		cleanup(kv, tmpPath)
+		if err := kv.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Remove(tmpPath); err != nil {
+			t.Fatal(err)
+		}
+
+		log.Printf("len = %d", len(b))
+		if err := ioutil.WriteFile("super_temp", b, 0600); err != nil {
+			t.Fatal(err)
+		}
+		nkv := newStore("super_temp")
+		if err := nkv.Restore(); err != nil {
+			t.Fatal(err)
+		}
+		kvs, _, err := nkv.Range([]byte("foo"), []byte("zoo"), 0, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		log.Printf("%+v", kvs)
+		nkv.Close()
+		os.Remove("super_temp")
 	}
 
 	for i := 1; i < len(hashes); i++ {

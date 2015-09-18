@@ -31,7 +31,7 @@ import (
 )
 
 func init() {
-	capnslog.SetGlobalLogLevel(capnslog.CRITICAL)
+	capnslog.SetGlobalLogLevel(capnslog.ERROR)
 }
 
 func TestV2Set(t *testing.T) {
@@ -900,6 +900,7 @@ func TestV2WatchKeyInDir(t *testing.T) {
 	v := url.Values{}
 	v.Set("dir", "true")
 	v.Set("ttl", "1")
+	fmt.Printf("%s: put ttl=1\n", time.Now().String())
 	resp, err := tc.PutForm(fmt.Sprintf("%s%s", u, "/v2/keys/keyindir"), v)
 	if err != nil {
 		t.Fatalf("put err = %v, want nil", err)
@@ -914,9 +915,11 @@ func TestV2WatchKeyInDir(t *testing.T) {
 		t.Fatalf("put err = %v, want nil", err)
 	}
 	resp.Body.Close()
+	fmt.Printf("%s: put key in dir done\n", time.Now().String())
 
 	go func() {
 		// Expect a notification when watching the node
+		fmt.Printf("%s: start watching\n", time.Now().String())
 		resp, err := tc.Get(fmt.Sprintf("%s%s", u, "/v2/keys/keyindir/bar?wait=true"))
 		if err != nil {
 			t.Fatalf("watch err = %v, want nil", err)
@@ -931,6 +934,11 @@ func TestV2WatchKeyInDir(t *testing.T) {
 	// We set that long disk and network delay because travis may be slow
 	// when do system calls.
 	case <-time.After(3 * time.Second):
+		select {
+		case <-c:
+		case <-time.After(20 * time.Second):
+			t.Fatal("timed out waiting for watch result at the second level")
+		}
 		t.Fatal("timed out waiting for watch result")
 	}
 

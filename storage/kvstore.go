@@ -15,6 +15,7 @@
 package storage
 
 import (
+	"bytes"
 	"errors"
 	"hash/crc32"
 	"io"
@@ -274,13 +275,20 @@ func (s *store) Compact(rev int64) error {
 	return nil
 }
 
-func (s *store) Hash() (uint32, error) {
+func (s *store) Hash() ([]byte, uint32, error) {
 	h := crc32.New(crc32.MakeTable(crc32.Castagnoli))
-	_, err := s.Snapshot(h)
+	b := bytes.NewBuffer(make([]byte, 0, 10*1024*1024))
+	_, err := s.Snapshot(b)
 	if err != nil {
-		return 0, err
+		log.Fatal(err)
 	}
-	return h.Sum32(), nil
+	nb := make([]byte, b.Len())
+	copy(nb, b.Bytes())
+	_, err = io.Copy(h, b)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return nb, h.Sum32(), nil
 }
 
 func (s *store) Snapshot(w io.Writer) (int64, error) {

@@ -510,6 +510,9 @@ func (s *store) internalCreate(nodePath string, dir bool, value string, unique, 
 	if expireTime.Before(minExpireTime) {
 		expireTime = Permanent
 	}
+	if expireTime != Permanent {
+		fmt.Printf("%+v: set key %s with expireTime at %s", time.Now(), nodePath, expireTime.String())
+	}
 
 	dirName, nodeName := path.Split(nodePath)
 
@@ -609,6 +612,7 @@ func (s *store) DeleteExpiredKeys(cutoff time.Time) {
 		}
 
 		s.CurrentIndex++
+		fmt.Printf("%+v: expire node at %s with index %d[expire: %s] at %s\n", time.Now(), node.Path, node.CreatedIndex, node.ExpireTime.String(), cutoff.String())
 		e := newEvent(Expire, node.Path, s.CurrentIndex, node.CreatedIndex)
 		e.EtcdIndex = s.CurrentIndex
 		e.PrevNode = node.Repr(false, false, s.clock)
