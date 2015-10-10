@@ -51,8 +51,6 @@ type snapshotStore struct {
 	// a chan to receive the requested raft snapshot
 	// snapshotStore will receive from the chan immediately after it sends empty to reqsnapc
 	raftsnapc chan raftpb.Snapshot
-
-	snap *snapshot
 }
 
 func newSnapshotStore(dir string, kv dstorage.KV) *snapshotStore {
@@ -76,9 +74,13 @@ func (ss *snapshotStore) getSnap() (*snapshot, error) {
 	// generate KV snapshot
 	kvsnap := ss.kv.Snapshot()
 	raftsnap := <-ss.raftsnapc
+
+	pr, pw := io.Pipe()
+	go kvsnap.WriteTo(pw)
+	raftsnap.DataReader.Reader = pr
+
 	ss.snap = &snapshot{
-		r:  raftsnap,
-		kv: kvsnap,
+		r: raftsnap,
 	}
 	return ss.snap, nil
 }
@@ -93,7 +95,7 @@ func (ss *snapshotStore) saveSnap(s *snapshot) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.writeTo(f)
+	_, err = io.Copy(f, s.raft().DataReader.Reader)
 	f.Close()
 	if err != nil {
 		os.Remove(f.Name())

@@ -30,6 +30,7 @@ message SnapshotMetadata {
 message Snapshot {
 	optional bytes            data     = 1;
 	optional SnapshotMetadata metadata = 2 [(gogoproto.nullable) = false];
+	optional bytes            dataReader = 3 [(gogoproto.customtype) = "SnapshotReader", (gogoproto.nullable) = false];
 }
 
 enum MessageType {

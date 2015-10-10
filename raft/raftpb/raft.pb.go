@@ -189,6 +189,7 @@ func (*SnapshotMetadata) ProtoMessage()    {}
 type Snapshot struct {
 	Data             []byte           `protobuf:"bytes,1,opt,name=data" json:"data,omitempty"`
 	Metadata         SnapshotMetadata `protobuf:"bytes,2,opt,name=metadata" json:"metadata"`
+	DataReader       SnapshotReader   `protobuf:"bytes,3,opt,name=dataReader,customtype=SnapshotReader" json:"dataReader"`
 	XXX_unrecognized []byte           `json:"-"`
 }
 
@@ -352,6 +353,14 @@ func (m *Snapshot) MarshalTo(data []byte) (int, error) {
 		return 0, err
 	}
 	i += n2
+	data[i] = 0x1a
+	i++
+	i = encodeVarintRaft(data, i, uint64(m.DataReader.Size()))
+	n3, err := m.DataReader.MarshalTo(data[i:])
+	if err != nil {
+		return 0, err
+	}
+	i += n3
 	if m.XXX_unrecognized != nil {
 		i += copy(data[i:], m.XXX_unrecognized)
 	}
@@ -409,11 +418,11 @@ func (m *Message) MarshalTo(data []byte) (int, error) {
 	data[i] = 0x4a
 	i++
 	i = encodeVarintRaft(data, i, uint64(m.Snapshot.Size()))
-	n3, err := m.Snapshot.MarshalTo(data[i:])
+	n4, err := m.Snapshot.MarshalTo(data[i:])
 	if err != nil {
 		return 0, err
 	}
-	i += n3
+	i += n4
 	data[i] = 0x50
 	i++
 	if m.Reject {
@@ -589,6 +598,8 @@ func (m *Snapshot) Size() (n int) {
 		n += 1 + l + sovRaft(uint64(l))
 	}
 	l = m.Metadata.Size()
+	n += 1 + l + sovRaft(uint64(l))
+	l = m.DataReader.Size()
 	n += 1 + l + sovRaft(uint64(l))
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
@@ -969,6 +980,33 @@ func (m *Snapshot) Unmarshal(data []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			if err := m.Metadata.Unmarshal(data[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field DataReader", wireType)
+			}
+			var byteLen int
+			for shift := uint(0); ; shift += 7 {
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := data[iNdEx]
+				iNdEx++
+				byteLen |= (int(b) & 0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if byteLen < 0 {
+				return ErrInvalidLengthRaft
+			}
+			postIndex := iNdEx + byteLen
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.DataReader.Unmarshal(data[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
