@@ -15,10 +15,15 @@
 package transport
 
 import (
+	"log"
 	"net"
 	"testing"
 	"time"
 )
+
+func init() {
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+}
 
 // TestNewTimeoutListener tests that NewTimeoutListener returns a
 // rwTimeoutListener struct with timeouts set.
@@ -69,14 +74,18 @@ func TestWriteReadTimeoutListener(t *testing.T) {
 	// fill the socket buffer
 	data := make([]byte, 5*1024*1024)
 	done := make(chan struct{})
+	log.Printf("creating goroutine to write date")
 	go func() {
+		log.Printf("start writing date")
 		_, err = conn.Write(data)
+		log.Printf("end writing date (err: %v)", err)
 		done <- struct{}{}
 	}()
 
 	select {
 	case <-done:
 	case <-time.After(wln.wtimeoutd * 10):
+		time.Sleep(10 * time.Second)
 		t.Fatal("wait timeout")
 	}
 

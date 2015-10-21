@@ -15,6 +15,7 @@
 package transport
 
 import (
+	"log"
 	"net"
 	"testing"
 	"time"
@@ -43,14 +44,18 @@ func TestReadWriteTimeoutDialer(t *testing.T) {
 	// fill the socket buffer
 	data := make([]byte, 5*1024*1024)
 	done := make(chan struct{})
+	log.Printf("creating goroutine to write date")
 	go func() {
+		log.Printf("start writing date")
 		_, err = conn.Write(data)
+		log.Printf("end writing date (err: %v)", err)
 		done <- struct{}{}
 	}()
 
 	select {
 	case <-done:
 	case <-time.After(d.wtimeoutd * 10):
+		time.Sleep(10 * time.Second)
 		t.Fatal("wait timeout")
 	}
 
