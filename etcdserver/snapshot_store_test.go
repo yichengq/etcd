@@ -24,7 +24,7 @@ import (
 	"github.com/coreos/etcd/pkg/testutil"
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
-	dstorage "github.com/coreos/etcd/storage"
+	v3storage "github.com/coreos/etcd/storage"
 	"github.com/coreos/etcd/storage/storagepb"
 )
 
@@ -183,12 +183,12 @@ func (kv *nopKV) TxnPut(txnID int64, key, value []byte) (rev int64, err error) {
 func (kv *nopKV) TxnDeleteRange(txnID int64, key, end []byte) (n, rev int64, err error) {
 	return 0, 0, nil
 }
-func (kv *nopKV) Compact(rev int64) error     { return nil }
-func (kv *nopKV) Hash() (uint32, error)       { return 0, nil }
-func (kv *nopKV) Snapshot() dstorage.Snapshot { return &fakeSnapshot{} }
-func (kv *nopKV) Commit()                     {}
-func (kv *nopKV) Restore() error              { return nil }
-func (kv *nopKV) Close() error                { return nil }
+func (kv *nopKV) Compact(rev int64) error      { return nil }
+func (kv *nopKV) Hash() (uint32, error)        { return 0, nil }
+func (kv *nopKV) Snapshot() v3storage.Snapshot { return &fakeSnapshot{} }
+func (kv *nopKV) Commit()                      {}
+func (kv *nopKV) Restore() error               { return nil }
+func (kv *nopKV) Close() error                 { return nil }
 
 type fakeSnapshot struct {
 	mu     sync.Mutex

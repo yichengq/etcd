@@ -21,7 +21,7 @@ import (
 	"github.com/coreos/etcd/Godeps/_workspace/src/github.com/gogo/protobuf/proto"
 	"github.com/coreos/etcd/Godeps/_workspace/src/golang.org/x/net/context"
 	pb "github.com/coreos/etcd/etcdserver/etcdserverpb"
-	dstorage "github.com/coreos/etcd/storage"
+	v3storage "github.com/coreos/etcd/storage"
 	"github.com/coreos/etcd/storage/storagepb"
 )
 
@@ -101,7 +101,7 @@ func (s *EtcdServer) processInternalRaftRequest(ctx context.Context, r pb.Intern
 }
 
 // Watcable returns a watchable interface attached to the etcdserver.
-func (s *EtcdServer) Watchable() dstorage.Watchable {
+func (s *EtcdServer) Watchable() v3storage.Watchable {
 	return s.kv
 }
 
@@ -133,7 +133,7 @@ func (s *EtcdServer) applyV3Request(r *pb.InternalRaftRequest) interface{} {
 	return ar
 }
 
-func applyPut(txnID int64, kv dstorage.KV, p *pb.PutRequest) (*pb.PutResponse, error) {
+func applyPut(txnID int64, kv v3storage.KV, p *pb.PutRequest) (*pb.PutResponse, error) {
 	resp := &pb.PutResponse{}
 	resp.Header = &pb.ResponseHeader{}
 	var (
@@ -152,7 +152,7 @@ func applyPut(txnID int64, kv dstorage.KV, p *pb.PutRequest) (*pb.PutResponse, e
 	return resp, nil
 }
 
-func applyRange(txnID int64, kv dstorage.KV, r *pb.RangeRequest) (*pb.RangeResponse, error) {
+func applyRange(txnID int64, kv v3storage.KV, r *pb.RangeRequest) (*pb.RangeResponse, error) {
 	resp := &pb.RangeResponse{}
 	resp.Header = &pb.ResponseHeader{}
 
@@ -181,7 +181,7 @@ func applyRange(txnID int64, kv dstorage.KV, r *pb.RangeRequest) (*pb.RangeRespo
 	return resp, nil
 }
 
-func applyDeleteRange(txnID int64, kv dstorage.KV, dr *pb.DeleteRangeRequest) (*pb.DeleteRangeResponse, error) {
+func applyDeleteRange(txnID int64, kv v3storage.KV, dr *pb.DeleteRangeRequest) (*pb.DeleteRangeResponse, error) {
 	resp := &pb.DeleteRangeResponse{}
 	resp.Header = &pb.ResponseHeader{}
 
@@ -203,7 +203,7 @@ func applyDeleteRange(txnID int64, kv dstorage.KV, dr *pb.DeleteRangeRequest) (*
 	return resp, nil
 }
 
-func applyTxn(kv dstorage.KV, rt *pb.TxnRequest) (*pb.TxnResponse, error) {
+func applyTxn(kv v3storage.KV, rt *pb.TxnRequest) (*pb.TxnResponse, error) {
 	var revision int64
 
 	txnID := kv.TxnBegin()
@@ -247,7 +247,7 @@ func applyTxn(kv dstorage.KV, rt *pb.TxnRequest) (*pb.TxnResponse, error) {
 	return txnResp, nil
 }
 
-func applyCompaction(kv dstorage.KV, compaction *pb.CompactionRequest) (*pb.CompactionResponse, error) {
+func applyCompaction(kv v3storage.KV, compaction *pb.CompactionRequest) (*pb.CompactionResponse, error) {
 	resp := &pb.CompactionResponse{}
 	resp.Header = &pb.ResponseHeader{}
 	err := kv.Compact(compaction.Revision)
@@ -259,7 +259,7 @@ func applyCompaction(kv dstorage.KV, compaction *pb.CompactionRequest) (*pb.Comp
 	return resp, err
 }
 
-func applyUnion(txnID int64, kv dstorage.KV, union *pb.RequestUnion) *pb.ResponseUnion {
+func applyUnion(txnID int64, kv v3storage.KV, union *pb.RequestUnion) *pb.ResponseUnion {
 	switch {
 	case union.RequestRange != nil:
 		resp, err := applyRange(txnID, kv, union.RequestRange)
@@ -290,13 +290,13 @@ func applyUnion(txnID int64, kv dstorage.KV, union *pb.RequestUnion) *pb.Respons
 // be presented. Or applyCompare panics.
 // It returns the revision at which the comparison happens. If the comparison
 // succeeds, the it returns true. Otherwise it returns false.
-func applyCompare(txnID int64, kv dstorage.KV, c *pb.Compare) (int64, bool) {
+func applyCompare(txnID int64, kv v3storage.KV, c *pb.Compare) (int64, bool) {
 	if txnID == noTxn {
 		panic("applyCompare called with noTxn")
 	}
 	ckvs, rev, err := kv.TxnRange(txnID, c.Key, nil, 1, 0)
 	if err != nil {
-		if err == dstorage.ErrTxnIDMismatch {
+		if err == v3storage.ErrTxnIDMismatch {
 			panic("unexpected txn ID mismatch error")
 		}
 		return rev, false

@@ -28,7 +28,7 @@ import (
 	"github.com/coreos/etcd/raft"
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/coreos/etcd/rafthttp"
-	dstorage "github.com/coreos/etcd/storage"
+	v3storage "github.com/coreos/etcd/storage"
 )
 
 // clearUnusedSnapshotInterval specifies the time interval to wait
@@ -47,7 +47,7 @@ type snapshot struct {
 	done chan struct{}
 }
 
-func newSnapshot(r raftpb.Snapshot, kv dstorage.Snapshot) *snapshot {
+func newSnapshot(r raftpb.Snapshot, kv v3storage.Snapshot) *snapshot {
 	done := make(chan struct{})
 	pr, pw := io.Pipe()
 	go func() {
@@ -75,11 +75,11 @@ func (s *snapshot) isClosed() bool {
 }
 
 // TODO: remove snapshotStore. getSnap part could be put into memoryStorage,
-// while SaveFrom could be put into another struct, or even put into dstorage package.
+// while SaveFrom could be put into another struct, or even put into v3storage package.
 type snapshotStore struct {
 	// dir to save snapshot data
 	dir string
-	kv  dstorage.KV
+	kv  v3storage.KV
 	tr  rafthttp.Transporter
 
 	// send empty to reqsnapc to notify the channel receiver to send back latest
@@ -98,7 +98,7 @@ type snapshotStore struct {
 	clock clockwork.Clock
 }
 
-func newSnapshotStore(dir string, kv dstorage.KV) *snapshotStore {
+func newSnapshotStore(dir string, kv v3storage.KV) *snapshotStore {
 	return &snapshotStore{
 		dir:       dir,
 		kv:        kv,

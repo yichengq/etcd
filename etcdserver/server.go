@@ -46,7 +46,7 @@ import (
 	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/coreos/etcd/rafthttp"
 	"github.com/coreos/etcd/snap"
-	dstorage "github.com/coreos/etcd/storage"
+	v3storage "github.com/coreos/etcd/storage"
 	"github.com/coreos/etcd/store"
 	"github.com/coreos/etcd/version"
 	"github.com/coreos/etcd/wal"
@@ -160,7 +160,7 @@ type EtcdServer struct {
 	cluster *cluster
 
 	store store.Store
-	kv    dstorage.ConsistentWatchableKV
+	kv    v3storage.ConsistentWatchableKV
 
 	stats  *stats.ServerStats
 	lstats *stats.LeaderStats
@@ -347,7 +347,7 @@ func NewServer(cfg *ServerConfig) (*EtcdServer, error) {
 		if err != nil && err != os.ErrExist {
 			return nil, err
 		}
-		srv.kv = dstorage.New(path.Join(cfg.StorageDir(), databaseFilename), &srv.consistIndex)
+		srv.kv = v3storage.New(path.Join(cfg.StorageDir(), databaseFilename), &srv.consistIndex)
 		if err := srv.kv.Restore(); err != nil {
 			plog.Fatalf("v3 storage restore error: %v", err)
 		}
@@ -506,7 +506,7 @@ func (s *EtcdServer) run() {
 						plog.Panicf("rename snapshot file error: %v", err)
 					}
 
-					newKV := dstorage.New(fn, &s.consistIndex)
+					newKV := v3storage.New(fn, &s.consistIndex)
 					if err := newKV.Restore(); err != nil {
 						plog.Panicf("restore KV error: %v", err)
 					}
